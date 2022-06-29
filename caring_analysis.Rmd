@@ -1,0 +1,110 @@
+---
+title: "Caring Analysis"
+author: "Jonathan Luu"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Read in data
+dat <- read.csv("/Users/jonathanluu/Dropbox/Caring Health/Data/CHC_SDOH_dataset_1.5.22_SFTPupload.csv")
+dat.distinct <- dat %>% distinct(PAT_ID, .keep_all = T)
+```
+
+# Exploratory analysis
+
+```{r}
+# Number of unique entries
+dat.distinct %>% nrow()
+
+# Age distribution
+dat.distinct$Age %>% summary()
+dat.distinct$Age %>% hist(main="Histogram of age", xlab="Age (years)")
+
+# Language
+dat.distinct$Language %>% unique() %>% length() # 64 different languages spoken
+dat.distinct$Language %>% table() %>% sort(decreasing = T) %>% 
+  head(n=15) %>% as_tibble() %>% rename(Language=".") # Most popular languages
+```
+
+\newpage
+```{r}
+# Race
+race.table <- dat.distinct$Race %>% table() %>% sort() %>% 
+  as.data.frame() %>% rename(Race=".")
+race.table %>% as_tibble()
+
+# Race barplot
+race.table %>% ggplot(aes(x=Freq, y=Race)) + geom_bar(stat="identity") +
+  theme(axis.text.y=element_text(angle=0,hjust=1,vjust=0.5)) + 
+  ggtitle("Race frequency")
+```
+
+\newpage
+```{r}
+# Ethnicity
+eth.table <- dat.distinct$Ethnicity %>% table() %>% sort() %>% 
+  as.data.frame() %>% rename(Ethnicity=".")
+eth.table %>% as_tibble()
+
+# Ethnicity barplot
+eth.table %>% ggplot(aes(x=Freq, y=Ethnicity)) + geom_bar(stat="identity") +
+  theme(axis.text.y=element_text(angle=0,hjust=1,vjust=0.5)) + 
+  ggtitle("Ethnicity frequency")
+```
+
+\newpage
+```{r}
+# Number of visits
+dat.distinct$Num_Visits %>% summary()
+
+# Most common number of visits
+dat.distinct$Num_Visits %>% table() %>% sort(decreasing=T) %>% 
+  head(n=10) %>% as_tibble() %>% rename("Num Visit"=".")
+dat.distinct %>% filter(Num_Visits <= 15) %>% pull(Num_Visits) %>% 
+  hist(breaks=0:15, main="Histogram of number of visits", xlab="Number of visits")
+```
+
+\newpage
+# Survey question descriptives
+
+```{r}
+# Response types
+dat$MEAS_DISP_NAME %>% unique() %>% length() # 45 different response types
+options(pillar.print_max = 50, pillar.print_min = 50)
+dat$MEAS_DISP_NAME %>% table() %>% sort(decreasing=T) %>% 
+  as_tibble() %>% rename(Question=".")
+
+# Response categories
+dat$DOMAIN_GRP %>% table() %>% sort(decreasing=T) %>% 
+  as_tibble() %>% rename(Response=".") # 13 categories of responses
+
+# Individuals with the most # of responses
+dat$PAT_ID %>% table() %>% sort(decreasing = T) %>% head(n=10) %>% 
+  as_tibble() %>% rename(ID=".")
+
+# Filter by response category
+dat.resp <- dat %>% select(PAT_ID, FLO_MEAS_ID, DOMAIN_GRP) %>% 
+  count(PAT_ID, DOMAIN_GRP) %>% mutate_all(na_if,"") %>%
+  pivot_wider(names_from = DOMAIN_GRP, values_from = n) 
+dat.resp %>% select(-PAT_ID) %>% summary()
+
+# Ranges of screening
+dat.resp[is.na(dat.resp)] <- 0
+dat.resp <- dat.resp %>% select(-"NA") %>% mutate(sum = rowSums(across(where(is.numeric))))
+
+# Number of questions answered
+dat.resp %>% filter(sum==0) %>% nrow() #21611 people did not have a survey answer
+dat.resp %>% filter(sum > 0) %>% select(sum) %>% summary() # 2469 individuals who did answer
+```
+
+## Questions
+
+Which are the narrowed-down 7 questions?
+
+
+
