@@ -12,14 +12,16 @@ library(ggplot2)
 
 # Read in data
 dat <- read.csv("/Users/jonathanluu/Dropbox/Caring Health/Data/CHC_SDOH_dataset_1.5.22_SFTPupload.csv")
+#dat <- read.csv("C:\\Users\\Jonathan\\Dropbox\\Caring Health\\Data\\CHC_SDOH_dataset_1.5.22_SFTPupload.csv")
 dat.distinct <- dat %>% distinct(PAT_ID, .keep_all = T)
 ```
 
-# Exploratory analysis
+# Exploratory analysis - July 14, 2022
 
 ```{r}
 # Number of unique entries
-dat.distinct %>% nrow()
+total.n <- dat.distinct %>% nrow()
+length(unique(dat.distinct$PAT_ID))
 
 # Age distribution
 dat.distinct$Age %>% summary()
@@ -87,24 +89,77 @@ dat$DOMAIN_GRP %>% table() %>% sort(decreasing=T) %>%
 dat$PAT_ID %>% table() %>% sort(decreasing = T) %>% head(n=10) %>% 
   as_tibble() %>% rename(ID=".")
 
-# Filter by response category
-dat.resp <- dat %>% select(PAT_ID, FLO_MEAS_ID, DOMAIN_GRP) %>% 
-  count(PAT_ID, DOMAIN_GRP) %>% mutate_all(na_if,"") %>%
-  pivot_wider(names_from = DOMAIN_GRP, values_from = n) 
-dat.resp %>% select(-PAT_ID) %>% summary()
-
-# Ranges of screening
-dat.resp[is.na(dat.resp)] <- 0
-dat.resp <- dat.resp %>% select(-"NA") %>% mutate(sum = rowSums(across(where(is.numeric))))
-
-# Number of questions answered
-dat.resp %>% filter(sum==0) %>% nrow() #21611 people did not have a survey answer
-dat.resp %>% filter(sum > 0) %>% select(sum) %>% summary() # 2469 individuals who did answer
+#dat %>% subset(PAT_ID=="Z3347793") %>% View()
 ```
 
-## Questions
+```{r}
+# Create new dataset showing number of responses by id and encounter
+dat.resp.enc <- dat %>% select(PAT_ID, FLO_MEAS_ID, DOMAIN_GRP, ENC_DATE) %>% 
+  count(PAT_ID, DOMAIN_GRP, ENC_DATE) %>% mutate_all(na_if,"") %>%
+  pivot_wider(names_from = DOMAIN_GRP, values_from = n) 
+dat.resp.enc %>% select(-PAT_ID, -ENC_DATE) %>% summary()
+# Ranges of screening
+dat.resp.enc <- dat.resp.enc %>% mutate_if(is.integer, ~replace(.,is.na(.),0))
+dat.resp.enc <- dat.resp.enc %>% select(-"NA") %>% mutate(sum = rowSums(across(where(is.numeric))))
 
-Which are the narrowed-down 7 questions?
+# Number of questions answered
+dat.resp.enc %>% filter(sum==0) %>% select(PAT_ID) %>% unique() %>% nrow() # 21611 people did not have a survey answer
+ans.n <- dat.resp.enc %>% filter(sum > 0) %>% select(PAT_ID) %>% unique() %>% nrow() # 2469 individuals who did answer
+```
+
+\newpage
+# August 14 Analysis
+
+```{r}
+# What constitutes completion? - Distribution of those who did complete a survey and how many questions did they answer?
+# 1035 people answered a financial question
+fin.n <- nrow(dat.resp.enc %>% select("PAT_ID", "Financial/Other") %>% filter(`Financial/Other`>0) %>% select(PAT_ID) %>% unique())
+fin.n/ans.n # 42% of the 2469 who answered
+fin.n/total.n # 4% of the total 24080
+
+# 2218 people answered a relationship safety question
+rel.n <- nrow(dat.resp.enc %>% select("PAT_ID", "Relationship Safety") %>% filter(`Relationship Safety`>0) %>% select(PAT_ID) %>% unique())
+rel.n/ans.n # 90% of the 2469 who answered
+rel.n/total.n # 9% of the total 24080
+
+# People who answered all questions in these 4 categories: Housing, transportation, food, and stress
+group.n <- dat.resp.enc %>% filter(sum>0)
+group.n.id <- dat.resp.enc %>% select("Food Insecurity","Housing","Transportation","Stress and Social Isolation") > 0
+group.n.id <- which(tibble(group.n.id) %>% apply(1,sum) == 4)
+group.n <- dat.resp.enc %>% slice(group.n.id)
+nrow(group.n) # 983 encounters with these 4 domain questions answered
+length(unique(group.n$PAT_ID)) # 920 individuals with these 4 domain questions answered
+
+# People who answered a question in all domains
+dom.n <- dat.resp.enc %>% filter(sum>0)
+dom.n.id <- dom.n %>% select(-c(PAT_ID,ENC_DATE,sum,n_encounter)) > 0
+dom.n.id <- which(tibble(dom.n.id) %>% apply(1,sum) == 12)
+dom.n <- dom.n %>% slice(dom.n.id)
+nrow(dom.n) # 636 encounters with all domain questions answered
+length(unique(dom.n$PAT_ID)) # 606 individuals with all domain questions answered
+
+# How many screens are done per individual
+# Assumption: A screen is when at least 1 question is answered during an encounter
+screen.count <- dat.resp.enc %>% filter(sum>0) %>% count(PAT_ID)
+summary(screen.count$n)
+table(screen.count$n) # 2075 out of 2469 had only one screen
+dat.resp.enc <- full_join(dat.resp.enc, screen.count, by="PAT_ID") %>% rename("n_encounter" = "n") # Append number of encounters to dataset
+
+# Screenings should have distance - see if dates are within the same week
+View(dat.resp.enc %>% filter(n_encounter>1)) # Did not see any overlapping screens
+# Several people getting multiple screens per year
+# Majority of these multiple screens occur in 2021
+
+# Export dataset
+write.csv(dat.resp.enc, file="response_by_encounter.csv")
+
+# Find out people with >=3 screens - get IDs
+```
+
+
+
+
+# March 1, 2018 - December 1, 2020
 
 
 
