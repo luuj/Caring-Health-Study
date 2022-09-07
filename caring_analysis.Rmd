@@ -145,7 +145,6 @@ summary(screen.count$n)
 table(screen.count$n) # 2075 out of 2469 had only one screen
 dat.resp.enc <- full_join(dat.resp.enc, screen.count, by="PAT_ID") %>% rename("n_encounter" = "n") # Append number of encounters to dataset
 
-# Screenings should have distance - see if dates are within the same week
 # View(dat.resp.enc %>% filter(n_encounter>1)) # Did not see any overlapping screens
 # Several people getting multiple screens per year
 # Majority of these multiple screens occur in 2021
@@ -155,10 +154,12 @@ dat.resp.enc <- full_join(dat.resp.enc, screen.count, by="PAT_ID") %>% rename("n
 # Find out people with >=4 screens - get IDs
 View(screen.count %>% filter(n>=4) %>% rename("n_screens" = "n")) 
 
-# TODO - can reduce certain questions down to one to prevent recounting
-# In-progress - finding out what the inclusion criteria are to define what missingness is
+# In-progress
 # Next steps: Conceptualizing the range of missingness in SDH data
 # How close are you to meeting implementation requirements
+
+## Inclusion criteria will be sent in email
+
 ```
 
 
