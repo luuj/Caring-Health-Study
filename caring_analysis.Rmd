@@ -145,20 +145,39 @@ summary(screen.count$n)
 table(screen.count$n) # 2075 out of 2469 had only one screen
 dat.resp.enc <- full_join(dat.resp.enc, screen.count, by="PAT_ID") %>% rename("n_encounter" = "n") # Append number of encounters to dataset
 
-# View(dat.resp.enc %>% filter(n_encounter>1)) # Did not see any overlapping screens
-# Several people getting multiple screens per year
-# Majority of these multiple screens occur in 2021
+View(dat.resp.enc %>% filter(n_encounter>=1)) # Did not see any overlapping screens
+table(dat.resp.enc %>% distinct(PAT_ID, .keep_all = T) %>% select(n_encounter))
 ```
 
 ```{r}
-# Find out people with >=4 screens - get IDs
-View(screen.count %>% filter(n>=4) %>% rename("n_screens" = "n")) 
+# 24080 unique individuals  - all patients 18+ years old who had an encounter in the past year in an SA38 department with at least one non-voided charge
+# 236450 total # of visits ranging from 1 to 268 visits per individual
+# 65533 observations - mix of single observation with no SDH and 1+ observation(s) with SDH
+# 21611 individuals with no SDH information
+# 2469 individuals answered at least one question, 2925 encounters total
+## 1035 individuals answered a financial question
+## 2218 individuals answered a relationship safety question
+## 920 individuals with 4 domain questions answered
+## 606 individuals with all domain questions answered
 
-# In-progress
+# What are we trying to answer? Relationship between some questions answered and how well a facility is doing? Metrics? How well are facilities doing screening? Which areas of screening do we need to improve on?
 # Next steps: Conceptualizing the range of missingness in SDH data
-# How close are you to meeting implementation requirements
+# Variability in missingness by strata (age, gender, race, providers)
+# How does missingness change over time in 6 month increments
 
-## Inclusion criteria will be sent in email
+
+dat.distinct$cat_visit = 0
+dat.distinct$cat_visit[dat.distinct$Num_Visits > 1] <- 1
+dat.distinct$cat_visit[dat.distinct$Num_Visits > 3] <- 2
+dat.distinct$cat_visit[dat.distinct$Num_Visits > 10] <- 3
+dat.distinct$cat_visit[dat.distinct$Num_Visits > 25] <- 4
+dat.distinct$cat_visit[dat.distinct$Num_Visits > 50] <- 5
+
+tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$cat_visit), FUN = mean)
+
+# Individuals with more visits more likely to have at least 1 SDH screening
+
+# Working on two other projects - Doctor of nursing practice - cardiac nurse
 
 ```
 
