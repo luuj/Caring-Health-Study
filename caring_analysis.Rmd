@@ -5,52 +5,80 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, comment = NA)
+knitr::opts_chunk$set(echo = TRUE, comment = NA, warning = F)
 library(tidyverse)
+library(readxl)
 library(lubridate)
 
 # Read in data
-dat <- read.csv("/Users/jonathanluu/Dropbox/Caring Health/Data/CHC_SDOH_dataset_1.5.22_SFTPupload.csv")
-
-# Reformat dates
-dat <- dat %>% mutate(Last_Visit_Date = mdy(Last_Visit_Date), ENC_DATE = mdy(str_remove(dat$ENC_DATE, " 0:00")))
+path <- "/Users/jonathanluu/Library/CloudStorage/Dropbox/Caring Health/Data/Caring_Data_V2.xlsx"
+dat <- lapply(excel_sheets(path = path), function(x) 
+  read_excel(path = path, sheet = x, col_types = c(rep("guess",20),"text","logical")))
+dat <- bind_rows(dat)
 
 # Create categorical visit
-dat <- dat %>% mutate(cat_visit = case_when(Num_Visits <= 1 ~ 0, 
-                                 Num_Visits > 1 & Num_Visits <= 3 ~ 1,
-                                 Num_Visits > 3 & Num_Visits <= 10 ~ 2,
-                                 Num_Visits > 10 & Num_Visits <= 25 ~ 3,
-                                 Num_Visits > 25 & Num_Visits <= 50 ~ 4,
-                                 Num_Visits > 50 ~ 5))
+dat <- dat %>% mutate(cat_visit = case_when(num_of_visits <= 1 ~ 0, 
+                                 num_of_visits > 1 & num_of_visits <= 3 ~ 1,
+                                 num_of_visits > 3 & num_of_visits <= 10 ~ 2,
+                                 num_of_visits > 10 & num_of_visits <= 25 ~ 3,
+                                 num_of_visits > 25 & num_of_visits <= 50 ~ 4,
+                                 num_of_visits > 50 ~ 5))
 
 # Create categorical age
-dat <- dat %>% mutate(cat_age = case_when(Age <= 32 ~ 0, 
-                                 Age > 32 & Age <= 44 ~ 1,
-                                 Age > 44 & Age <= 58 ~ 2,
-                                 Age > 58 ~ 3))
+dat <- dat %>% mutate(cat_age = case_when(Age <= 39 ~ 0, 
+                                 Age > 39 & Age <= 64 ~ 1,
+                                 Age > 65 ~ 2))
+
+# Rename some columns
+dat <- rename(dat, Language = "LANGUAGE_NAME", Ethnicity = "ETHNIC_GROUP", Race = "RACE")
+
+# Format dates
+dat <- dat %>% mutate(ENC_DATE = ymd(ENC_DATE), Last_Visit_Date = ymd(Last_Visit_Date))
 
 # Get distinct IDs
 dat.distinct <- dat %>% distinct(PAT_ID, .keep_all = T)
 ```
 
-# Exploratory analysis - July 14, 2022
+# Exploratory analysis 
+
+This dataset is based off version 1 of the dataset. It contains encounter visits between 05/2018 to 10/2022 using the following inclusion/exclusion criteria:
+
+* Visit date during the reporting period (determined by report parameters)
+* Visit took place in an SA38 department
+* Visit has at least one non-voided charge
+* Patient is 18 years or older as of the date the report is run
+
+For the first analysis, I explored the dataset to get a better understanding of the number of observations, the distributions of all the variables, and extent of missingness. 
+
+\newpage
+### Age
 
 ```{r}
-# Number of unique entries
+# Number of unique entries in the data
 length(unique(dat.distinct$PAT_ID))
 
 # Age distribution
 dat.distinct$Age %>% summary()
-dat.distinct$Age %>% hist(main="Histogram of age", xlab="Age (years)")
+```
 
+```{r, echo=FALSE}
+dat.distinct$Age %>% hist(main="Histogram of age", xlab="Age (years)")
+```
+
+\newpage
+### Language
+
+```{r}
 # Language
-dat.distinct$Language %>% unique() %>% length() # 64 different languages spoken
+dat.distinct$Language %>% unique() %>% length() # 67 different languages spoken
 dat.distinct$Language %>% table() %>% sort(decreasing = T) %>% 
   head(n=15) %>% as_tibble() %>% rename(Language=".") # Most popular languages
 ```
 
 \newpage
-```{r}
+### Race
+
+```{r, echo=FALSE}
 # Race
 race.table <- dat.distinct$Race %>% table() %>% sort() %>% 
   as.data.frame() %>% rename(Race=".")
@@ -62,8 +90,12 @@ race.table %>% ggplot(aes(x=Freq, y=Race)) + geom_bar(stat="identity") +
   ggtitle("Race frequency")
 ```
 
+Again, we can see there are some missing data for race.
+
 \newpage
-```{r}
+### Ethnicity
+
+```{r, echo=FALSE}
 # Ethnicity
 eth.table <- dat.distinct$Ethnicity %>% table() %>% sort() %>% 
   as.data.frame() %>% rename(Ethnicity=".")
@@ -75,41 +107,110 @@ eth.table %>% ggplot(aes(x=Freq, y=Ethnicity)) + geom_bar(stat="identity") +
   ggtitle("Ethnicity frequency")
 ```
 
+Similarly for ethnicity, we have around 3130 unknown values and 90 refusals. 
+
 \newpage
+### Number of visits
+
 ```{r}
 # Number of visits
-dat.distinct$Num_Visits %>% summary()
+dat.distinct$num_of_visits %>% summary()
 
 # Most common number of visits
-dat.distinct$Num_Visits %>% table() %>% sort(decreasing=T) %>% 
+dat.distinct$num_of_visits %>% table() %>% sort(decreasing=T) %>% 
   head(n=10) %>% as_tibble() %>% rename("Num Visit"=".")
-dat.distinct %>% filter(Num_Visits <= 15) %>% pull(Num_Visits) %>% 
+```
+
+```{r,echo=FALSE}
+dat.distinct %>% filter(num_of_visits <= 15) %>% pull(num_of_visits) %>% 
   hist(breaks=0:15, main="Histogram of number of visits", xlab="Number of visits")
 ```
 
 \newpage
-# Survey question descriptives
+### PCP information
+
+We can see the distribution of PCPs seeing each of these individuals, as well as the distribution of PCP degrees
+
+```{r, echo=FALSE}
+dat$PCP_NAME %>% table() %>% sort(decreasing=T) %>% 
+  as.tibble() %>% rename("PCP Name"=".") %>% print(n=25)
+
+dat$PCP_DEGREE %>% table() %>% sort(decreasing=T) %>% 
+  as.tibble() %>% rename("PCP Degree"=".")
+```
+
+\newpage
+### Provider types and charged visits
+
+Lastly, the distributions of provider types that took in and entered in data, as well as whether the visit is considered a charged-visit.
+
+```{r, echo=FALSE}
+dat$TakenProviderType %>% table() %>% sort(decreasing=T) %>% 
+  as.tibble() %>% rename("Taken Provider Type"=".") # Provider type distribution
+dat$HasChargeVisit %>% table() %>% sort(decreasing=T) %>% 
+  as.tibble() %>% rename("Charged visit"=".") # Charged visits
+```
+
+
+\newpage
+# Survey question descriptives 
+
+Next, I looked at the distribution of response types - what were the most common questions being answered, what categories did these responses fall into, and which individuals had the most number of responses.
 
 ```{r}
-# Response types
-dat$MEAS_DISP_NAME %>% unique() %>% length() # 45 different response types
+# Number of response questions being asked
+dat$MEAS_DISP_NAME %>% unique() %>% length() # 45 different response questions
 options(pillar.print_max = 50, pillar.print_min = 50)
 dat$MEAS_DISP_NAME %>% table() %>% sort(decreasing=T) %>% 
   as_tibble() %>% rename(Question=".")
 
-# Response categories
+# Domain categories
 dat$DOMAIN_GRP %>% table() %>% sort(decreasing=T) %>% 
   as_tibble() %>% rename(Response=".") # 13 categories of responses
+```
 
+Note that we have an empty domain, indicating the individuals who did not answer a particular question.
+
+```{r}
 # Individuals with the most # of responses
 dat$PAT_ID %>% table() %>% sort(decreasing = T) %>% head(n=10) %>% 
   as_tibble() %>% rename(ID=".")
 ```
 
+From this, we can see some individuals have a very high number of responses.
+
 \newpage
-# August 14 Analysis
+# Screening and missingness analysis
+
+Next, I looked at how many individuals answered at least one SDH screening. Among those, what were the distributions that answered at least one financial question, one relationship safety question, and all domain questions. These numbers are summarized below:
 
 ```{r}
+# 32421 unique individuals 
+# 335402 total # of visits ranging from 1 to 379 visits per individual
+# 266077 observations - mix of single observation without SDH and 1+ observations with SDH
+# 242597 screening questions answered
+# 23480 individuals with no SDH information
+
+# 8941 individuals answered at least one question
+# 12964 unique encounters 
+## 6012 individuals answered a financial question (67% of 8941, 19% of 32421)
+## 8135 individuals answered a relationship safety question (91% of 8941, 25% of 32421)
+## 5996 individuals with 4 domain questions answered (67% of 8941, 19% of 32421)
+  ## Housing, transportation, food, and stress
+## 2120 individuals with all domain questions answered (24% of 8941, 7% of 32421)
+```
+
+From these numbers, we can see there is a mix of individuals for whom there are no problems and those who have SDH challenges but do not respond.
+
+Note: 15 individuals with 0 visits
+
+```{r, echo=FALSE}
+dat.distinct %>% filter(num_of_visits==0) %>% 
+  select(PAT_ID, num_of_visits, Last_Visit_Date, ENC_DATE) %>% print(n=15)
+```
+
+
+```{r, include=FALSE}
 # Create new dataset showing number of responses by id and encounter
 dat.resp.enc <- dat %>% count(PAT_ID, DOMAIN_GRP, ENC_DATE) %>% mutate_all(na_if,"") %>%
   pivot_wider(names_from = DOMAIN_GRP, values_from = n) 
@@ -119,40 +220,40 @@ dat.resp.enc <- dat.resp.enc %>% mutate_if(is.integer, ~replace(.,is.na(.),0))
 dat.resp.enc <- dat.resp.enc %>% select(-"NA") %>% mutate(sum = rowSums(across(where(is.numeric))))
 
 # Number of questions answered
-dat.resp.enc %>% filter(sum==0) %>% select(PAT_ID) %>% unique() %>% nrow() # 21611 people did not have a survey answer
-ans.n <- dat.resp.enc %>% filter(sum > 0) %>% select(PAT_ID) %>% unique() %>% nrow() # 2469 individuals who did answer
+dat.resp.enc %>% filter(sum==0) %>% select(PAT_ID) %>% unique() %>% nrow() # 23480 people did not have a survey answer
+ans.n <- dat.resp.enc %>% filter(sum > 0) %>% select(PAT_ID) %>% unique() %>% nrow() # 8941 individuals who did answer
 
 # Extract covariates for each ID
-covar <- dat.distinct %>% select(PAT_ID, cat_age, cat_visit, Race, Ethnicity, Language)
+covar <- dat.distinct %>% select(PAT_ID, cat_age, cat_visit, Race, Ethnicity, Language, HasChargeVisit)
 dat.resp.enc <- merge(dat.resp.enc,covar,all.x=T)
 
 # What constitutes completion? - Distribution of those who did complete a survey and how many questions did they answer?
-# 1035 people answered a financial question
+# 6012 people answered a financial question
 total.n <- dat.distinct %>% nrow()
 fin.n <- nrow(dat.resp.enc %>% filter(`Financial/Other`>0) %>% select(PAT_ID) %>% unique())
-fin.n/ans.n # 42% of the 2469 who answered
-fin.n/total.n # 4% of the total 24080
+fin.n/ans.n # 67% of the 8941 who answered
+fin.n/total.n # 18% of the total 32421
 
-# 2218 people answered a relationship safety question
+# 8135 people answered a relationship safety question
 rel.n <- nrow(dat.resp.enc %>% filter(`Relationship Safety`>0) %>% select(PAT_ID) %>% unique())
-rel.n/ans.n # 90% of the 2469 who answered
-rel.n/total.n # 9% of the total 24080
+rel.n/ans.n # 91% of the 8941 who answered
+rel.n/total.n # 25% of the total 32421
 
 # People who answered all questions in these 4 categories: Housing, transportation, food, and stress
 group.n <- dat.resp.enc %>% filter(sum>0)
 group.n.id <- dat.resp.enc %>% select("Food Insecurity","Housing","Transportation","Stress and Social Isolation") > 0
 group.n.id <- which(tibble(group.n.id) %>% apply(1,sum) == 4)
 group.n <- dat.resp.enc %>% slice(group.n.id)
-nrow(group.n) # 983 encounters with these 4 domain questions answered
-length(unique(group.n$PAT_ID)) # 920 individuals with these 4 domain questions answered
+nrow(group.n) # 7774 encounters with these 4 domain questions answered
+length(unique(group.n$PAT_ID)) # 5996 individuals with these 4 domain questions answered
 
 # People who answered a question in all domains
 dom.n <- dat.resp.enc %>% filter(sum>0)
 dom.n.id <- dom.n %>% select(-c(PAT_ID,ENC_DATE,sum)) > 0
 dom.n.id <- which(tibble(dom.n.id) %>% apply(1,sum) == 12)
 dom.n <- dom.n %>% slice(dom.n.id)
-nrow(dom.n) # 636 encounters with all domain questions answered
-length(unique(dom.n$PAT_ID)) # 606 individuals with all domain questions answered
+nrow(dom.n) # 2332 encounters with all domain questions answered
+length(unique(dom.n$PAT_ID)) # 2120 individuals with all domain questions answered
 
 # How many screens are done per individual
 # Assumption: A screen is when at least 1 question is answered during an encounter
@@ -161,69 +262,82 @@ summary(screen.count$n)
 table(screen.count$n) # 2075 out of 2469 had only one screen
 dat.resp.enc <- full_join(dat.resp.enc, screen.count, by="PAT_ID") %>% rename("n_encounter" = "n") # Append number of encounters to dataset
 
-table(dat.resp.enc %>% distinct(PAT_ID, .keep_all = T) %>% select(n_encounter)) # Tabulated num of encounters
+# Demographics of those who responded
+response_ids <- dat.resp.enc %>% filter(sum > 0) %>% distinct(PAT_ID) %>% c() %>% .[[1]]
+dat.resp <- dat %>% filter(PAT_ID %in% response_ids)
+dat.resp.distinct <- dat.resp %>% distinct(PAT_ID, .keep_all = T)
 ```
 
 ```{r}
-# 24080 unique individuals  - all patients 18+ years old who had an encounter in the past year in an SA38 department with at least one non-voided charge
-# 236450 total # of visits ranging from 1 to 268 visits per individual
-# 65533 observations - mix of single observation with no SDH and 1+ observation(s) with SDH
-# 21611 individuals with no SDH information
-# 2469 individuals answered at least one question, 2925 encounters total
-## 1035 individuals answered a financial question
-## 2218 individuals answered a relationship safety question
-## 920 individuals with 4 domain questions answered
-## 606 individuals with all domain questions answered
+# Distribution of SDH screen counts
+table(screen.count$n)
 ```
 
+From this distribution of screening counts, a majority of individuals only had 1 screen, going up to 2 individuals having 9 screens.
+
+
 \newpage
-# September 26 Analysis
+# Screening probability analysis
+
+Next, we explored the chances of an individual receiving a screen, depending on their covariates. To distinguish individuals who have received a screen or not, I chose to use the FLO_MEAS_ID which indicates the type of SDH question being asked to the subject. If an individual does not receive a screen, this value is NA.
 
 ```{r}
 # Individuals with more visits more likely to have at least 1 SDH screening
+# Categories by visit: 0: 1, 1: 1-3, 2: 3-10, 3: 10-25, 4: 25-50, 5: >50 
 round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$cat_visit), FUN = mean),2)
 
-# Older less likely to have a screening
+# Overall rate of having at least 1 SDH screening
+mean(!is.na(dat.distinct$FLO_MEAS_ID))
+
+# Older individuals less likely to have a screening
+# Categories by age: 0: <32, 1: 32-44, 2: 44-58, 3: >58
 round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$cat_age), FUN = mean),2)
 
-# Probability of having at least 1 SDH screening by race
-round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$Race, dat.distinct$Ethnicity), FUN = mean),2)
+# Probability of having at least 1 SDH screening by race and ethnicity
+round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), 
+             list(dat.distinct$Race, dat.distinct$Ethnicity), FUN = mean),2)
 
-# Probability of having at least 1 SDH screening by ethnicity
-round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$Ethnicity), FUN = mean),2)
+# Probability of having at least 1 SDH screening by language
+data.frame(probability=round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), 
+                  list(dat.distinct$Language), FUN = mean),2) ) %>% filter(probability>0)
+```
 
-round(tapply(!is.na(dat.distinct$FLO_MEAS_ID), list(dat.distinct$Language), FUN = mean),2)
+\newpage
+## Dates and screened demographics
+We explored the range of dates for both last visit and encounter dates. Note that the ranges of these do not match up, indicating an issue with some encounter dates being missing. The NAs in this context also represent the individuals who never had an encounter/SDH screen. 
 
-
-# Range of dates
+```{r}
+# Range of last visit and encounter dates
 summary(dat.distinct$Last_Visit_Date)
 summary(dat.distinct$ENC_DATE)
+```
 
-# Demographics of those who responded
-dat.resp.distinct <- dat.resp.enc %>% filter(sum > 0) %>% distinct(PAT_ID, .keep_all = T)
+We also analyzed various distributions of individuals who had at least 1 response:
 
-# Race table of those who responded
-table(dat.resp.distinct$Race)
-
-# Ethnicity table of those who responded
-table(dat.resp.distinct$Ethnicity)
+```{r}
+# Race by ethnicity table of those who responded
+table(dat.resp.distinct$Race, dat.resp.distinct$Ethnicity)
 
 # Age category table of those who responded: 0: <32, 1: 32-44, 2: 44-58, 3: >58
 table(dat.resp.distinct$cat_age)
 
-# Visit category table fo those who responded: 0: 1, 1: 1-3, 2: 3-10, 3: 10-25, 4: 25-50, 5: >50 
+# Visit category table of those who responded: 0: 1, 1: 1-3, 2: 3-10, 3: 10-25, 4: 25-50, 5: >50 
 table(dat.resp.distinct$cat_visit)
-
-# Visits in a year
-dat.resp.distinct %>% filter(ENC_DATE >= "2018-01-01" & ENC_DATE <= "2018-12-31") %>% nrow()
-dat.resp.distinct %>% filter(ENC_DATE >= "2019-01-01" & ENC_DATE <= "2019-12-31") %>% nrow()
-dat.resp.distinct %>% filter(ENC_DATE >= "2020-01-01" & ENC_DATE <= "2020-12-31") %>% nrow()
-dat.resp.distinct %>% filter(ENC_DATE >= "2021-01-01" & ENC_DATE <= "2021-12-31") %>% nrow()
-
-# Talk to Sebastien about abstract / paper moving forward
-# Export dat.distinct and send over sorted by date
-# How much is missing in REL
 ```
+
+\newpage
+# Response analysis
+
+```{r, echo=FALSE}
+getResponse <- function(questionType){
+  dat.resp %>% filter(MEAS_DISP_NAME == questionType) %>% pull(RESPONSE) %>%
+    table() %>% sort(decreasing = T) %>% as_tibble() %>% rename(!!questionType:=".")
+}
+
+questions <- dat$MEAS_DISP_NAME %>% unique() %>% .[-28] # All response types
+lapply(questions,getResponse)
+```
+
 
 
 
